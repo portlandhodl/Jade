@@ -7,20 +7,25 @@ WORKDIR /jade
 COPY . .
 RUN cp ${SDK_CONFIG} sdkconfig.defaults
 RUN . /root/esp/esp-idf/export.sh && idf.py all
-RUN ./tools/fwprep.py build/jade.bin build
+RUN . /root/esp/esp-idf/export.sh && pip install zopfli && ./tools/fwprep.py build/jade.bin build
 
 ENV PATH=$PATH:/jade/main/qemu
 RUN make-flash-img.sh
+RUN . /root/esp/esp-idf/export.sh && cp $(which qemu-system-xtensa) /qemu-system-xtensa && \
+    QEMU_DIR=$(dirname $(dirname $(which qemu-system-xtensa))) && \
+    cp -r $QEMU_DIR/share /qemu-share
 
 FROM debian:bookworm-slim@sha256:12c396bd585df7ec21d5679bb6a83d4878bc4415ce926c9e5ea6426d23c60bdc
 
-RUN apt-get update -yqq && apt-get install -yqq libpixman-1-dev libglib2.0-dev libslirp-dev libncurses-dev
+RUN apt-get update -yqq && apt-get install -yqq libpixman-1-dev libglib2.0-dev libslirp-dev libncurses-dev libsdl2-2.0-0 procps
 
 COPY --from=builder /flash_image.bin /flash_image.bin
 COPY --from=builder /qemu_efuse.bin /qemu_efuse.bin
 
 COPY --from=builder /jade/main/qemu/ /jade/main/qemu/
+COPY --from=builder /qemu-system-xtensa /usr/local/bin/qemu-system-xtensa
+COPY --from=builder /qemu-share /usr/local/share
 
 ENV PATH=$PATH:/jade/main/qemu
 
-CMD [ "qemu_run.sh" ]
+CMD [ "/jade/main/qemu/qemu_run_standalone.sh" ]
